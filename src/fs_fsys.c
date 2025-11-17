@@ -14,6 +14,7 @@
 #include "apk_xattr.h"
 #include "apk_extract.h"
 #include "apk_database.h" // for db->atoms
+#include "apk_shim.h"
 
 #define TMPNAME_MAX (PATH_MAX + 64)
 
@@ -199,6 +200,9 @@ static int fsys_file_control(struct apk_fsdir *d, apk_blob_t filename, int ctrl)
 			     atfd, fn) < 0) {
 			rc = -errno;
 			unlinkat(atfd, tmpname, 0);
+		} else {
+			int shim_rc = apk_shim_install(ac, fn);
+			if (shim_rc < 0 && !rc) rc = shim_rc;
 		}
 		break;
 	case APK_FS_CTRL_APKNEW:
@@ -218,6 +222,8 @@ static int fsys_file_control(struct apk_fsdir *d, apk_blob_t filename, int ctrl)
 		// unlink realname
 		if (unlinkat(atfd, fn, 0) < 0)
 			rc = -errno;
+		else
+			apk_shim_remove(ac, fn);
 		break;
 	case APK_FS_CTRL_DELETE_APKNEW:
 		// remove apknew (which may or may not exist)

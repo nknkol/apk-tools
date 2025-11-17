@@ -5,13 +5,24 @@ but now used by several other distributions as well.
 
 ## Building
 
-The preferred build system for building apk-tools is Meson:
+The preferred build system for building apk-tools is Meson. By default, builds
+install under `$HOME/.horpkg/sysroot`:
 
 ```
-# meson setup -Dprefix=/ build
-# ninja -C build
-# meson install -C build
+$ meson setup build
+$ ninja -C build
+$ meson install -C build
 ```
+
+To install elsewhere, override the prefix when configuring, for example
+`-Dprefix=/usr`.
+
+运行时，`apk` 的默认根目录（`--root`）同样指向 `$HOME/.horpkg/sysroot`；
+如需操作系统根，显式传入 `--root /`。
+
+安装 ELF 可执行文件时，会自动在 `$HOME/.horpkg/runtime` 下生成同路径的 shim
+脚本，shim 会设置 `HPKG_PREFIX`、`LD_LIBRARY_PATH` 并通过 `loader` 调用实际
+位于 `$HOME/.horpkg/sysroot` 下的可执行文件。
 
 For bootstrapping without Python, muon is also compatible. All you have to do is replace `meson` with `muon` in the above example.
 

@@ -23,7 +23,7 @@ libapk_so		:= $(obj)/libapk.so.$(libapk_soname)
 libapk.so.$(libapk_soname)-objs := \
 	adb.o adb_comp.o adb_walk_adb.o apk_adb.o \
 	atom.o balloc.o blob.o commit.o common.o context.o crypto.o crypto_$(CRYPTO).o ctype.o \
-	database.o hash.o extract_v2.o extract_v3.o fs_fsys.o fs_uvol.o \
+	database.o hash.o extract_v2.o extract_v3.o fs_fsys.o fs_uvol.o shim.o \
 	io.o io_gunzip.o io_url_$(URL_BACKEND).o tar.o package.o pathbuilder.o print.o process.o \
 	query.o repoparser.o serialize.o serialize_json.o serialize_query.o serialize_yaml.o \
 	solver.o trust.o version.o
@@ -122,4 +122,3 @@ install: $(obj)/apk $(libapk_so) $(libapk_a)
 	$(INSTALL) -m644 src/*.h $(DESTDIR)$(INCLUDEDIR)/apk
 	$(INSTALLDIR) $(DESTDIR)$(PKGCONFIGDIR)
 	$(INSTALL) -m644 $(obj)/apk.pc $(DESTDIR)$(PKGCONFIGDIR)
-

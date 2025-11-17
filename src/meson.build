@@ -24,6 +24,7 @@ libapk_src = [
 	'hash.c',
 	'io.c',
 	'io_gunzip.c',
+	'apk_shim.c',
 	'io_url_@0@.c'.format(url_backend),
 	'package.c',
 	'pathbuilder.c',

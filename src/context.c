@@ -8,10 +8,29 @@
  */
 
 #include <errno.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include "apk_context.h"
 #include "apk_fs.h"
+
+static const char *apk_default_root(void)
+{
+	static char default_root[PATH_MAX];
+	static int initialized;
+
+	if (initialized) return default_root;
+
+	const char *home = getenv("HOME");
+	if (!home || !home[0]) home = "/";
+	snprintf(default_root, sizeof default_root, "%s/.horpkg/sysroot", home);
+	initialized = 1;
+
+	return default_root;
+}
 
 void apk_ctx_init(struct apk_ctx *ac)
 {
@@ -63,7 +82,7 @@ int apk_ctx_prepare(struct apk_ctx *ac)
 	if (ac->flags & APK_ALLOW_UNTRUSTED) ac->trust.allow_untrusted = 1;
 	if (!ac->cache_dir) ac->cache_dir = "etc/apk/cache";
 	else ac->cache_dir_set = 1;
-	if (!ac->root) ac->root = "/";
+	if (!ac->root) ac->root = apk_default_root();
 	if (ac->cache_predownload) ac->cache_packages = 1;
 
 	if (!strcmp(ac->root, "/")) {
