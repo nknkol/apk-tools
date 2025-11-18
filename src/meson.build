@@ -17,6 +17,7 @@ libapk_src = [
 	'crypto_@0@.c'.format(crypto_backend),
 	'ctype.c',
 	'database.c',
+	'apk_init.c',
 	'extract_v2.c',
 	'extract_v3.c',
 	'fs_fsys.c',

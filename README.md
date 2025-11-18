@@ -6,7 +6,7 @@ but now used by several other distributions as well.
 ## Building
 
 The preferred build system for building apk-tools is Meson. By default, builds
-install under `$HOME/.horpkg/sysroot`:
+install under the Meson prefix (e.g. `/usr/local` unless overridden):
 
 ```
 $ meson setup build
@@ -17,12 +17,17 @@ $ meson install -C build
 To install elsewhere, override the prefix when configuring, for example
 `-Dprefix=/usr`.
 
-运行时，`apk` 的默认根目录（`--root`）同样指向 `$HOME/.horpkg/sysroot`；
-如需操作系统根，显式传入 `--root /`。
+运行时，`apk` 的默认根目录（`--root`）指向 `$HOME/.hapkg/sysroot`；如需
+操作系统根，显式传入 `--root /`。
 
-安装 ELF 可执行文件时，会自动在 `$HOME/.horpkg/runtime` 下生成同路径的 shim
-脚本，shim 会设置 `HPKG_PREFIX`、`LD_LIBRARY_PATH` 并通过 `loader` 调用实际
-位于 `$HOME/.horpkg/sysroot` 下的可执行文件。
+安装 ELF 可执行文件时，会为每个可执行生成 shim，shim 会设置 `HPKG_PREFIX`、
+`LD_LIBRARY_PATH` 并通过 `loader` 调用实际位于 `$HOME/.hapkg/sysroot` 下的二
+进制；所有 shim 会被打包到 `$HOME/.hapkg/temp/horpkgruntime.hnp`（内容来自
+`$HOME/.hapkg/temp/horpkgruntime/bin`）。
+
+首次在默认根下使用时会自动初始化 `~/.hapkg/sysroot`（创建数据库目录、写入
+`main`/`community` 仓库并尝试获取官方公钥）；如需手动初始化，可运行
+`apk add --root ~/.hapkg/sysroot --initdb --usermode`。
 
 For bootstrapping without Python, muon is also compatible. All you have to do is replace `meson` with `muon` in the above example.
 

@@ -26,10 +26,26 @@ static const char *apk_default_root(void)
 
 	const char *home = getenv("HOME");
 	if (!home || !home[0]) home = "/";
-	snprintf(default_root, sizeof default_root, "%s/.horpkg/sysroot", home);
+	snprintf(default_root, sizeof default_root, "%s/.hapkg/sysroot", home);
 	initialized = 1;
 
 	return default_root;
+}
+
+const char *apk_ctx_default_root(void)
+{
+	return apk_default_root();
+}
+
+int apk_ctx_root_is_default(struct apk_ctx *ac)
+{
+	const char *root = ac->root ? ac->root : apk_default_root();
+	return strcmp(root, apk_default_root()) == 0;
+}
+
+void apk_ctx_ensure_root(struct apk_ctx *ac)
+{
+	if (!ac->root) ac->root = apk_default_root();
 }
 
 void apk_ctx_init(struct apk_ctx *ac)

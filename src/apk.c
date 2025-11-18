@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <fcntl.h>
 #include <ctype.h>
 #include <errno.h>
@@ -24,9 +25,12 @@
 #include "apk_database.h"
 #include "apk_applet.h"
 #include "apk_blob.h"
+#include "apk_init.h"
 #include "apk_print.h"
 #include "apk_io.h"
 #include "apk_fs.h"
+#include "apk_shim.h"
+#include "apk_process.h"
 
 char **apk_argv;
 
@@ -555,6 +559,17 @@ static void redirect_callback(int code, const char *url)
 	apk_warn(&ctx.out, "Permanently redirected to %s", url);
 }
 
+static int run_cmd(char * const* argv, const char *name)
+{
+	struct apk_process p;
+	int r = apk_process_init(&p, name, &ctx.out, NULL);
+	if (r != 0) return r;
+	r = apk_process_spawn(&p, argv[0], argv, NULL);
+	if (r != 0) return r;
+	r = apk_process_run(&p);
+	return apk_process_cleanup(&p);
+}
+
 int main(int argc, char **argv)
 {
 	void *applet_ctx = NULL;
@@ -607,6 +622,9 @@ int main(int argc, char **argv)
 	if (applet->remove_empty_arguments)
 		argc = remove_empty_strings(argc, argv);
 
+	apk_ctx_ensure_root(&ctx);
+	apk_auto_init(&ctx, NULL);
+
 	apk_db_init(&db, &ctx);
 	signal(SIGINT, on_sigint);
 
@@ -630,6 +648,33 @@ int main(int argc, char **argv)
 
 	r = applet->main(applet_ctx, &ctx, args);
 	signal(SIGINT, SIG_IGN);
+	if (r == 0) {
+		int pack_r = apk_shim_pack(&ctx);
+		if (pack_r != 0) {
+			apk_err(out, "Failed to refresh shim package: %s", apk_error_str(pack_r));
+			if (applet && !strcmp(applet->name, "add") && apk_array_len(args) > 0) {
+				apk_err(out, "Rolling back installed packages due to shim failure");
+				setenv("HPKG_SKIP_SHIM_PACK", "1", 1);
+				size_t cnt = apk_array_len(args);
+				size_t base = 6;
+				char **del_argv = calloc(base + cnt + 1, sizeof(char *));
+				if (del_argv) {
+					del_argv[0] = "apk";
+					del_argv[1] = "del";
+					del_argv[2] = "--root";
+					del_argv[3] = (char*) ctx.root;
+					del_argv[4] = "--no-progress";
+					del_argv[5] = "--quiet";
+					for (size_t i = 0; i < cnt; i++)
+						del_argv[base + i] = args->item[i];
+					del_argv[base + cnt] = NULL;
+					run_cmd(del_argv, "apk");
+					free(del_argv);
+				}
+			}
+			r = pack_r;
+		}
+	}
 	apk_db_close(&db);
 
 err:

@@ -95,11 +95,15 @@ struct apk_ctx {
 	unsigned int cache_predownload : 1;
 	unsigned int keys_loaded : 1;
 	unsigned int legacy_info : 1;
-};
+	unsigned int shim_dirty : 1;
+}; 
 
 void apk_ctx_init(struct apk_ctx *ac);
 void apk_ctx_free(struct apk_ctx *ac);
 int apk_ctx_prepare(struct apk_ctx *ac);
+const char *apk_ctx_default_root(void);
+int apk_ctx_root_is_default(struct apk_ctx *ac);
+void apk_ctx_ensure_root(struct apk_ctx *ac);
 
 struct apk_trust *apk_ctx_get_trust(struct apk_ctx *ac);
 struct apk_id_cache *apk_ctx_get_id_cache(struct apk_ctx *ac);

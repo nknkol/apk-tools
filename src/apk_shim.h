@@ -8,3 +8,4 @@
 
 int apk_shim_install(struct apk_ctx *ac, const char *relative_path);
 int apk_shim_remove(struct apk_ctx *ac, const char *relative_path);
+int apk_shim_pack(struct apk_ctx *ac);
