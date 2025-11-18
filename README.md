@@ -25,6 +25,11 @@ To install elsewhere, override the prefix when configuring, for example
 进制；所有 shim 会被打包到 `$HOME/.hapkg/temp/horpkgruntime.hnp`（内容来自
 `$HOME/.hapkg/temp/horpkgruntime/bin`）。
 
+初次自动初始化会用 HTTP 写入 main/community 仓库地址，尝试下载官方公钥，
+并拉取一份 CA 证书包到 `$HOME/.hapkg/sysroot/etc/ssl/certs/ca-certificates.crt`
+（默认来源于 curl.se）。如需切换回 HTTPS，可手动编辑
+`$HOME/.hapkg/sysroot/etc/apk/repositories`。
+
 首次在默认根下使用时会自动初始化 `~/.hapkg/sysroot`（创建数据库目录、写入
 `main`/`community` 仓库并尝试获取官方公钥）；如需手动初始化，可运行
 `apk add --root ~/.hapkg/sysroot --initdb --usermode`。

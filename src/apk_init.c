@@ -19,8 +19,10 @@
 #include "apk_io.h"
 #include "apk_print.h"
 
-#define HAPKG_REPO_BASE "https://dl-cdn.alpinelinux.org/alpine/latest-stable"
-#define HAPKG_KEYS_BASE "https://git.alpinelinux.org/aports/plain/main/alpine-keys"
+// Use http to avoid TLS bootstrap issues when no CA certs are present.
+#define HAPKG_REPO_BASE "http://dl-cdn.alpinelinux.org/alpine/latest-stable"
+#define HAPKG_KEYS_BASE "http://git.alpinelinux.org/aports/plain/main/alpine-keys"
+#define HAPKG_CA_URL    "http://curl.se/ca/cacert.pem"
 
 static const char *default_repos[] = {
 	HAPKG_REPO_BASE "/main",
@@ -133,6 +135,18 @@ static int ensure_keys(struct apk_ctx *ac, const char *keys_dir)
 	return 0;
 }
 
+static int ensure_ca_bundle(struct apk_ctx *ac, const char *root)
+{
+	char ca_dir[PATH_MAX], ca_path[PATH_MAX];
+
+	if (apk_fmt(ca_dir, sizeof ca_dir, "%s/etc/ssl/certs", root) < 0) return -ENAMETOOLONG;
+	if (apk_fmt(ca_path, sizeof ca_path, "%s/ca-certificates.crt", ca_dir) < 0) return -ENAMETOOLONG;
+
+	if (ensure_dir(ca_dir) < 0) return -errno;
+	if (access(ca_path, F_OK) == 0) return 0;
+	return download_to_file(ac, HAPKG_CA_URL, ca_path);
+}
+
 static bool hapkg_root(struct apk_ctx *ac, const char *root)
 {
 	const char *def = apk_ctx_default_root();
@@ -166,6 +180,7 @@ int apk_auto_init(struct apk_ctx *ac, bool *created_db)
 
 	if (apk_fmt(path, sizeof path, "%s/etc/apk/keys", root) >= 0)
 		ensure_keys(ac, path);
+	ensure_ca_bundle(ac, root);
 
 	if (created_db) *created_db = false;
 	if (apk_fmt(path, sizeof path, "%s/lib/apk/db/lock", root) >= 0) {
