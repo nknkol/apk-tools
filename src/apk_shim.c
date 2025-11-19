@@ -41,6 +41,23 @@ static bool is_executable_elf(int root_fd, const char *relpath)
 	return magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F';
 }
 
+static bool is_shim_target(const char *relpath)
+{
+	// Only create shims for typical executable locations.
+	static const char *bins[] = {
+		"bin/",
+		"sbin/",
+		"usr/bin/",
+		"usr/sbin/",
+		"usr/local/bin/",
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(bins); i++) {
+		size_t len = strlen(bins[i]);
+		if (strncmp(relpath, bins[i], len) == 0) return true;
+	}
+	return false;
+}
+
 static int get_hpkg_prefix(struct apk_ctx *ac, char *buf, size_t bufsz)
 {
 	const char *env = getenv("HPKG_PREFIX");
@@ -198,12 +215,22 @@ static int copy_file(const char *src, const char *dst)
 	return r;
 }
 
+static int reset_dir(struct apk_ctx *ac, const char *path)
+{
+	char *rm_argv[] = { "rm", "-rf", (char*)path, NULL };
+	run_process(ac, rm_argv, "rm");
+	if (apk_make_dirs(AT_FDCWD, path, 0755, 0755) < 0 && errno != EEXIST)
+		return -errno;
+	return 0;
+}
+
 int apk_shim_install(struct apk_ctx *ac, const char *relative_path)
 {
 	char stage_root[PATH_MAX], shim_path[PATH_MAX], real_path[PATH_MAX];
 	char bin_dir[PATH_MAX], manifest[PATH_MAX];
 	int r;
 
+	if (!is_shim_target(relative_path)) return 0;
 	if (!is_executable_elf(apk_ctx_fd_root(ac), relative_path))
 		return 0;
 
@@ -283,17 +310,34 @@ int apk_shim_pack(struct apk_ctx *ac)
 
 	if (snprintf(hap_dest, sizeof hap_dest, "%s/org.horpkg.runtime.hap", output_dir) >= (int)sizeof hap_dest)
 		return -ENAMETOOLONG;
+	if (snprintf(hap_hnp, sizeof hap_hnp, "%s/org.horpkg.runtime.hap.dir", output_dir) >= (int)sizeof hap_hnp)
+		return -ENAMETOOLONG;
 
-	// Fresh copy of base hap into temp
-	char *rm_argv[] = { "rm", "-rf", hap_dest, NULL };
-	run_process(ac, rm_argv, "rm");
-	char *cp_argv[] = { "cp", "-a", BASE_RUNTIME_HAP, hap_dest, NULL };
-	r = run_process(ac, cp_argv, "cp");
+	r = reset_dir(ac, hap_hnp);
 	if (r != 0) return r;
 
-	if (snprintf(hap_hnp, sizeof hap_hnp, "%s/hnp/arm64-v8a/%s", hap_dest, HNP_OUTPUT_NAME) >= (int)sizeof hap_hnp)
+	char *unzip_argv[] = { "unzip", "-oq", (char*)BASE_RUNTIME_HAP, "-d", hap_hnp, NULL };
+	r = run_process(ac, unzip_argv, "unzip");
+	if (r != 0) return r;
+
+	char hap_hnp_target[PATH_MAX], hap_hnp_dir[PATH_MAX];
+	if (apk_fmt(hap_hnp_target, sizeof hap_hnp_target, "%s/hnp/arm64-v8a/%s", hap_hnp, HNP_OUTPUT_NAME) < 0)
 		return -ENAMETOOLONG;
-	r = copy_file(new_hnp, hap_hnp);
+	if (apk_fmt(hap_hnp_dir, sizeof hap_hnp_dir, "%s/hnp/arm64-v8a", hap_hnp) < 0)
+		return -ENAMETOOLONG;
+	if (apk_make_dirs(AT_FDCWD, hap_hnp_dir, 0755, 0755) < 0 && errno != EEXIST)
+		return -errno;
+	r = copy_file(new_hnp, hap_hnp_target);
+	if (r != 0) return r;
+
+	// Repack hap
+	char zip_cmd[PATH_MAX * 2];
+	if (apk_fmt(zip_cmd, sizeof zip_cmd, "cd %s && zip -qr %s .", hap_hnp, hap_dest) < 0)
+		return -ENAMETOOLONG;
+	char *zip_argv[] = { "sh", "-c", zip_cmd, NULL };
+	char *rm_hap[] = { "rm", "-f", hap_dest, NULL };
+	run_process(ac, rm_hap, "rm");
+	r = run_process(ac, zip_argv, "zip");
 	if (r != 0) return r;
 
 	char *install_argv[] = { "horpkg", "install", "pin", HNP_PIN, hap_dest, NULL };

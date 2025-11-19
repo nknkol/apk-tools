@@ -648,6 +648,7 @@ int main(int argc, char **argv)
 
 	r = applet->main(applet_ctx, &ctx, args);
 	signal(SIGINT, SIG_IGN);
+	apk_db_close(&db);
 	if (r == 0) {
 		int pack_r = apk_shim_pack(&ctx);
 		if (pack_r != 0) {
@@ -675,7 +676,6 @@ int main(int argc, char **argv)
 			r = pack_r;
 		}
 	}
-	apk_db_close(&db);
 
 err:
 	if (r == -ESHUTDOWN) r = 0;
