@@ -19,22 +19,12 @@
 #include "apk_io.h"
 #include "apk_print.h"
 
-// Use http to avoid TLS bootstrap issues when no CA certs are present.
+// Repositories only; keys/CA are expected to be provided ahead of time (build-time or manual).
 #define HAPKG_REPO_BASE "http://dl-cdn.alpinelinux.org/alpine/latest-stable"
-#define HAPKG_KEYS_BASE "http://git.alpinelinux.org/aports/plain/main/alpine-keys"
-#define HAPKG_CA_URL    "http://curl.se/ca/cacert.pem"
 
 static const char *default_repos[] = {
 	HAPKG_REPO_BASE "/main",
 	HAPKG_REPO_BASE "/community",
-};
-
-static const char *default_keys[] = {
-	"alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
-	"alpine-devel@lists.alpinelinux.org-58cbb476.rsa.pub",
-	"alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
-	"alpine-devel@lists.alpinelinux.org-5e69ca50.rsa.pub",
-	"alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
 };
 
 static int path_join(char *buf, size_t len, const char *a, const char *b)
@@ -81,72 +71,6 @@ static int write_repositories(struct apk_ctx *ac, const char *path)
 	return 0;
 }
 
-static int download_to_file(struct apk_ctx *ac, const char *url, const char *path)
-{
-	struct apk_out *out = &ac->out;
-	struct apk_istream *is = apk_io_url_istream(url, APK_ISTREAM_FORCE_REFRESH);
-	if (IS_ERR(is)) return PTR_ERR(is);
-
-	int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-	if (fd < 0) {
-		apk_istream_close(is);
-		return -errno;
-	}
-
-	char buf[4096];
-	int r = 0;
-	while ((r = apk_istream_read(is, buf, sizeof buf)) > 0) {
-		if (apk_write_fully(fd, buf, r) != r) {
-			r = -errno;
-			break;
-		}
-	}
-	int cr = apk_istream_close(is);
-	if (r >= 0 && cr < 0) r = cr;
-	close(fd);
-
-	if (r < 0) {
-		unlink(path);
-		apk_warn(out, "Failed to download %s: %s", url, apk_error_str(r));
-		return r;
-	}
-
-	return 0;
-}
-
-static int ensure_keys(struct apk_ctx *ac, const char *keys_dir)
-{
-	struct apk_out *out = &ac->out;
-	char key_path[PATH_MAX], key_url[PATH_MAX];
-	int r = ensure_dir(keys_dir);
-	if (r < 0) return r;
-
-	for (size_t i = 0; i < ARRAY_SIZE(default_keys); i++) {
-		if (path_join(key_path, sizeof key_path, keys_dir, default_keys[i]) < 0)
-			continue;
-		if (access(key_path, F_OK) == 0)
-			continue;
-		if (apk_fmt(key_url, sizeof key_url, "%s/%s", HAPKG_KEYS_BASE, default_keys[i]) < 0)
-			continue;
-		r = download_to_file(ac, key_url, key_path);
-		if (r == 0)
-			apk_msg(out, "Downloaded key %s", default_keys[i]);
-	}
-	return 0;
-}
-
-static int ensure_ca_bundle(struct apk_ctx *ac, const char *root)
-{
-	char ca_dir[PATH_MAX], ca_path[PATH_MAX];
-
-	if (apk_fmt(ca_dir, sizeof ca_dir, "%s/etc/ssl/certs", root) < 0) return -ENAMETOOLONG;
-	if (apk_fmt(ca_path, sizeof ca_path, "%s/ca-certificates.crt", ca_dir) < 0) return -ENAMETOOLONG;
-
-	if (ensure_dir(ca_dir) < 0) return -errno;
-	if (access(ca_path, F_OK) == 0) return 0;
-	return download_to_file(ac, HAPKG_CA_URL, ca_path);
-}
-
 static bool hapkg_root(struct apk_ctx *ac, const char *root)
 {
 	const char *def = apk_ctx_default_root();
@@ -178,9 +102,7 @@ int apk_auto_init(struct apk_ctx *ac, bool *created_db)
 	if (apk_fmt(path, sizeof path, "%s/etc/apk/repositories", root) >= 0)
 		write_repositories(ac, path);
 
-	if (apk_fmt(path, sizeof path, "%s/etc/apk/keys", root) >= 0)
-		ensure_keys(ac, path);
-	ensure_ca_bundle(ac, root);
+	// Keys/CA are expected to be provided at build time or manually; no runtime download.
 
 	if (created_db) *created_db = false;
 	if (apk_fmt(path, sizeof path, "%s/lib/apk/db/lock", root) >= 0) {
