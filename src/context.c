@@ -125,6 +125,9 @@ int apk_ctx_prepare(struct apk_ctx *ac)
 	}
 	ac->dest_fd = ac->root_fd;
 
+	if (ac->open_flags & APK_OPENF_USERMODE)
+		ac->flags |= APK_NO_SCRIPTS;
+
 	if (ac->open_flags & APK_OPENF_CREATE) {
 		uid_t uid = getuid();
 		if (ac->open_flags & APK_OPENF_USERMODE) {
